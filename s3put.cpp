@@ -24,7 +24,6 @@ static const int MB = KB * 1024;
 static const char bucketName[100] = "scanspeed";
 
 unsigned char **buf;
-//[ maxConnectionCount ][ maxSize ];
 AsyncMan *asyncMans;
 
 S3Connection ** cons;
@@ -66,23 +65,19 @@ int main( int argc, char **argv )
         {
             objectMBs.push_back( atoi(argv[++i]) );
         }
-
-        if (!strcmp(argv[i], "-c"))
+        else if (!strcmp(argv[i], "-c"))
         {
             ConnectionCount = atoi(argv[++i]);
         }
-        
-        if (!strcmp(argv[i], "-a"))
+        else if (!strcmp(argv[i], "-a"))
         {
             numAsyncMan = atoi(argv[++i]);
         }
-
-        if (!strcmp(argv[i], "-ki"))
+        else if (!strcmp(argv[i], "-ki"))
         {
             keylow = atoi(argv[++i]);
         }
-
-        if (!strcmp(argv[i], "-kh"))
+        else if (!strcmp(argv[i], "-kh"))
         {
             keyhigh = atoi(argv[++i]);
         }
