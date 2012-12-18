@@ -86,9 +86,11 @@ int main( int argc, char **argv )
         std::cout << "no AWS_XXXX is set. ";
         return 1;
     }
-
+    
     int unitSize = objectMB * MB / size / connectionCount;
     int base = objectMB * MB / size * rank;
+    
+    Stopwatch total;
     //fprintf(stderr, "%d %d %d\n", rank, base, unitSize);
     for ( int i = 0; i < connectionCount; ++i )
     {
@@ -103,8 +105,10 @@ int main( int argc, char **argv )
     if (rank == 0) std::cout << connectionCount << " connection(s): \n";
 
     
-    
+    MPI::COMM_WORLD.Barrier();
+    total.start();
     stopwatch.start();
+    
     for ( int i = 0; i < connectionCount; ++i )
     {
         //fprintf(stderr, "size %d; offset %d\n", unitSize, unitSize * i + base);
@@ -114,9 +118,15 @@ int main( int argc, char **argv )
 
     for ( int i = 0; i < connectionCount; ++i )
         cons[i]->completeGet();
-
+    
+    double time = total.elapsed();
     double bandwidth = 1000.0 * objectMB / size / stopwatch.elapsed();
     std::cerr << rank << ": " << bandwidth << "MiB/s\n";
+    
+    MPI::COMM_WORLD.Barrier();
+    
+    if (rank == 0)
+        std::cerr << "Total time: " << time << "ms" << "\n";
 
     /*
     int p = 0;    
