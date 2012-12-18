@@ -46,15 +46,18 @@ LOADLIBES+=-lcurl -lssl -lxml2 -O3
 CC=mpic++
 
 .PHONY: all
-all: s3dbg s3put s3get
+all: s3dbg s3put s3get s3multiget
 #s3perf s3test 
 
 s3get: s3get.cpp
 	$(CC) $(CXXFLAGS) s3get.cpp webstor.a  $(LOADLIBES) -o s3get
+	
+s3multiget: s3multiget.cpp
+	$(CC) $(CXXFLAGS) s3multiget.cpp webstor.a  $(LOADLIBES) -o s3multiget
 
 .PHONY: clean
 clean:
-	rm -f s3dbg s3put s3get webstor.a
+	rm -f s3dbg s3put s3get s3multiget webstor.a
 #s3perf s3test 
 
 s3dbg: webstor.a
@@ -64,6 +67,8 @@ s3dbg: webstor.a
 #s3test: webstor.a
 
 s3put: webstor.a
+	
+s3multiget: webstor.a
 
 s3get: webstor.a
 

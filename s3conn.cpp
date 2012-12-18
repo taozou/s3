@@ -33,6 +33,8 @@
 
 #include <algorithm>
 #include <memory>
+#include <sstream>
+
 
 namespace webstor
 {
@@ -490,6 +492,7 @@ appendRequestHeader( const char *key, const char *value, ScopedCurlList *plist )
     header.append( value );
 
     // Create a new list head and dupe the string.
+    //fprintf(stderr, "parameter: %s\n", header.c_str());
 
     curl_slist *const newlist = curl_slist_append( *plist, header.c_str() );
 
@@ -506,7 +509,7 @@ static void
 setRequestHeaders( const std::string &accKey, const std::string &secKey,
     const char *contentMd5, const char *contentType, bool makePublic, bool srvEncrypt,
     const char *action, const char *bucketName, const char *key, bool isWalrus, 
-    ScopedCurlList *plist )
+    ScopedCurlList *plist, size_t low, size_t high )
 {
     dbgAssert( plist );
 
@@ -579,6 +582,15 @@ setRequestHeaders( const std::string &accKey, const std::string &secKey,
         appendRequestHeader( s_encryptHeaderKey, s_encryptHeaderValue, plist );
 
     appendRequestHeader( "Accept", "", plist );
+    
+    if (low <= high)
+    {
+        std::ostringstream r;
+        r << "bytes=";
+        r << low << "-" << high - 1;
+        appendRequestHeader( "Range", r.str().c_str(), plist);
+    }    
+    
     appendRequestHeader( "Authorization", signature.c_str(), plist );
     appendRequestHeader( "Connection", "Keep-Alive", plist );
     appendRequestHeader( "Expect", "", plist );
@@ -820,10 +832,9 @@ Request::saveIfCurlError( CURLcode curlCode )
     // treat CURLE_WRITE_ERROR as success. The error is returned only when our handleXXX methods 
     // processed a part of the response and don't care about the rest.
 
-    if( curlCode != CURLE_OK && curlCode != CURLE_WRITE_ERROR )
+    if( curlCode != CURLE_OK && curlCode != CURLE_WRITE_ERROR)
     {
         // Check if we have any details about this error.
-
         dbgAssert( m_curlErrorDetails );
 
         if( *m_curlErrorDetails )
@@ -1252,6 +1263,7 @@ S3Request::handleHeader_( const void *headerData,
             m_responseDetails.httpStatus.assign( p, size );
 
             if( startsWith( p, size, STRING_WITH_LEN( "200 OK" ) ) || 
+                startsWith( p, size, STRING_WITH_LEN( "206 Partial Content" ) ) || 
                 startsWith( p, size, STRING_WITH_LEN( "204 No Content" ) ) ) 
             {
                 m_responseDetails.status = S3_RESPONSE_STATUS_SUCCESS;
@@ -2181,7 +2193,6 @@ handleErrors( const S3ResponseDetails &details )
             //$ REVIEW: add details.amazonId and details.hostId
             // to the exception class (without forcing them into
             // the message).
-
             throw S3Exception( errAWS, 
                 details.errorMessage.c_str(), 
                 details.errorCode.c_str(), 
@@ -2381,7 +2392,7 @@ writeNoop( const void *chunkData, size_t count, size_t elementSize, void *ctx ) 
 
 void
 S3Connection::prepare( S3Request *request, const char *bucketName, const char *key,
-        const char *contentType, bool makePublic, bool useSrvEncrypt )
+        const char *contentType, bool makePublic, bool useSrvEncrypt, size_t low, size_t high)
 {
     dbgAssert( !m_asyncRequest ); // some async operation is in progress, need to complete/cancel it first 
                                   // before starting a new one.
@@ -2473,7 +2484,7 @@ S3Connection::prepare( S3Request *request, const char *bucketName, const char *k
     setRequestHeaders( m_accKey, m_secKey,
         0 /* contentMd5 */, contentType, makePublic, useSrvEncrypt,
         request->httpVerb(), bucketName, key, m_isWalrus,
-        &request->headers );
+        &request->headers, low, high );
 
     curl_easy_setopt_checked( m_curl, CURLOPT_HTTPHEADER, static_cast< curl_slist * >( request->headers ) );
 
@@ -2485,7 +2496,7 @@ S3Connection::prepare( S3Request *request, const char *bucketName, const char *k
 void
 S3Connection::init( S3Request *request, const char *bucketName, const char *key, 
                       const char *keySuffix, const char *contentType, 
-                      bool makePublic,  bool useSrvEncrypt )
+                      bool makePublic,  bool useSrvEncrypt, size_t low, size_t high )
 {
     dbgAssert( bucketName );
 
@@ -2493,7 +2504,7 @@ S3Connection::init( S3Request *request, const char *bucketName, const char *key,
     std::string escapedKey;
     composeUrl( m_baseUrl, bucketName, key, keySuffix, &url, &escapedKey );
 
-    prepare( request, bucketName, key ? escapedKey.c_str() : NULL, contentType, makePublic, useSrvEncrypt );
+    prepare( request, bucketName, key ? escapedKey.c_str() : NULL, contentType, makePublic, useSrvEncrypt, low ,high );
 
     request->setUrl( url.c_str() );
 }
@@ -2756,8 +2767,10 @@ completeGet( S3ResponseDetails &responseDetails, S3GetResponse *response )
         responseDetails.loadedContentLength = -1;
     }
 
+    //fprintf(stderr, "%s\n", responseDetails.httpStatus.c_str());
+    //if (responseDetails.httpStatus != "206 Partial Content")
     handleErrors( responseDetails );
-
+    
     if( response )
     {
         response->loadedContentLength = responseDetails.loadedContentLength;
@@ -2812,7 +2825,7 @@ S3Connection::get( const char *bucketName, const char *key, void *buffer, size_t
 }
 
 void
-S3Connection::pendGet( AsyncMan *asyncMan, const char *bucketName, const char *key, void *buffer, size_t size )
+S3Connection::pendGet( AsyncMan *asyncMan, const char *bucketName, const char *key, void *buffer, size_t size, size_t offset)
 {
     dbgAssert( asyncMan != NULL );
     dbgAssert( bucketName );
@@ -2821,13 +2834,21 @@ S3Connection::pendGet( AsyncMan *asyncMan, const char *bucketName, const char *k
     dbgAssert( !m_asyncRequest );  // another async operation is in progress.
 
     LOG_TRACE( "enter pendGet: conn=0x%llx", ( UInt64 )this );
-
+ 
     try
     {
         // Initialize Get request.
 
         std::auto_ptr< S3GetRequest > request( new S3GetRequest( key, buffer, size ) );
-        init( request.get(), bucketName, key );
+        
+        if (offset >= 0 )
+        {
+            init( request.get(), bucketName, key, NULL, NULL, false, false,  offset, offset + size);
+        }
+        else
+        {
+            init( request.get(), bucketName, key);
+        }
 
         // Start async.
 

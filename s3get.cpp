@@ -76,7 +76,7 @@ int main( int argc, char **argv )
     
     if ( !objectMBs.size() )
     {
-         printf("s3put [-s size(MB)]+ [-c ConnectionCount(1)] [-a numAsyncMan(4)] [-ki keylow(0)] [-kh keyhigh(0)]\n");
+         printf("s3get -s size(MB)]+ [-c ConnectionCount(1)] [-a numAsyncMan(4)] [-ki keylow(0)] [-kh keyhigh(0)]\n");
          MPI::Finalize();
          return 1;
     }
@@ -170,19 +170,25 @@ int main( int argc, char **argv )
                         std::cout << "get fail\n";
                     }
 
-                    /*unsigned char p = 0;
-                    for (int i = 0; i < maxSize; ++i)
-                        p = p ^ buf[k][i];
-                    printf("%d\n", p);
-                    */
+                    //int p = 0;
+                    //for (int j = 0; j < objectSize; ++j)
+                    //    p = p ^ buf[k][j];
+                    //printf("%u\n", p);
+                    
                     cons[k]->pendGet( &asyncMans[i % numAsyncMan],
                         bucketName, getKey(keylow + i, objectMB).c_str(), buf[k], objectSize);
 
-                    if ( !(i % (totalKey / 10)) )
-                        print('.');
+                    //if ( !(i % (totalKey / 10)) )
+                    //    print('.');
                 }
                 for ( int i = 0; i < connectionCount; ++i )
+                {
                     cons[i]->completeGet();
+                    //int p = 0;
+                    //for (int j = 0; j < objectSize; ++j)
+                    //    p = p ^ buf[i][j];
+                    //printf("%u\n", p);
+                }
                 double bandwidth = 1000.0 * objectMB * totalKey/ stopwatch.elapsed();
                 std::cout << rank << ": " << bandwidth << "MiB/s\n";
             }

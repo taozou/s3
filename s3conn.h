@@ -630,7 +630,7 @@ public:
    
    void             pendPut( AsyncMan *asyncMan, const char *bucketName, const char *key, 
                         const void *data, size_t size,
-                        bool makePublic = false, bool useSrvEncrypt = false );
+                        bool makePublic = false, bool useSrvEncrypt = false);
 
    ///@brief Waits and completes the asynchronous <b>put</b> request.
    ///@details Completes the started asynchronous put operation. The method blocks till the operation finishes.
@@ -648,7 +648,7 @@ public:
    /// multiple S3Connections.
 
    void             pendGet( AsyncMan *asyncMan, const char *bucketName, const char *key, 
-                        void *buffer, size_t size );
+                        void *buffer, size_t size, size_t offset = -1);
 
    ///@brief Waits and completes the asynchronous <b>get</b> request.
    ///@details Completes the started asynchronous get operation. The method blocks till the operation finishes.
@@ -718,11 +718,11 @@ private:
 
     void            prepare( S3Request *request, const char *bucketName, const char *key,
                         const char *contentType = NULL,
-                        bool makePublic = false, bool useSrvEncrypt = false );
+                        bool makePublic = false, bool useSrvEncrypt = false, size_t low = 0, size_t high = 0);
 
     void            init( S3Request *request, const char *bucketName, const char *key, 
                         const char *keySuffix = NULL, const char *contentType = NULL, 
-                        bool makePublic = false, bool useSrvEncrypt = false );
+                        bool makePublic = false, bool useSrvEncrypt = false, size_t low = 0, size_t high = 0);
 
     void            put( S3Request *request, const char *bucketName, const char *key, 
                         const char *uploadId, int partNumber, 
